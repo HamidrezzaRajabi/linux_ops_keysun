@@ -1,0 +1,12 @@
+---
+galaxy_info:
+  role_name: command_logging
+  author: linux-ops
+  description: Log interactive bash commands to syslog via a PROMPT_COMMAND hook
+  license: MIT
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Ubuntu
+      versions: [focal, jammy, noble, resolute]
+dependencies:
+  - role: preflight

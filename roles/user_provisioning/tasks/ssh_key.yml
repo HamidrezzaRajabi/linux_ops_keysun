@@ -1,0 +1,48 @@
+---
+# authorized_keys is fully managed: a key removed from the manifest is removed from the host.
+# Uses _name, _home, _present, _state, _keys from create_user.yml.
+- name: "Ensure ~/.ssh exists for {{ _name }}"
+  ansible.builtin.file:
+    path: "{{ _home }}/.ssh"
+    state: directory
+    owner: "{{ _name }}"
+    mode: "{{ users_ssh_dir_mode }}"
+  when:
+    - _present
+    - _manageable
+
+- name: "Deploy authorized_keys for {{ _name }}"
+  ansible.posix.authorized_key:
+    user: "{{ _name }}"
+    key: "{{ _keys | join('\n') }}"
+    exclusive: true
+    state: present
+  when:
+    - _present
+    - _manageable
+
+- name: "Enforce authorized_keys permissions for {{ _name }}"
+  ansible.builtin.file:
+    path: "{{ _home }}/.ssh/authorized_keys"
+    owner: "{{ _name }}"
+    mode: "{{ users_authorized_keys_mode }}"
+  when:
+    - _present
+    - _manageable
+    - not ansible_check_mode
+
+- name: "Remove authorized_keys of disabled user {{ _name }}"
+  ansible.builtin.file:
+    path: "{{ _home }}/.ssh/authorized_keys"
+    state: absent
+  when:
+    - not _present
+    - _manageable
+
+- name: "Remove authorized_keys2 for {{ _name }}"
+  ansible.builtin.file:
+    path: "{{ _home }}/.ssh/authorized_keys2"
+    state: absent
+  when:
+    - users_remove_authorized_keys2 | bool
+    - _manageable

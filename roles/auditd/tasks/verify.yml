@@ -1,0 +1,25 @@
+---
+- name: List loaded audit rules
+  ansible.builtin.command: auditctl -l
+  register: auditd_loaded
+  changed_when: false
+  check_mode: false
+
+- name: Verify the execve rule is loaded
+  ansible.builtin.assert:
+    that:
+      - auditd_loaded.stdout is search(auditd_execve_key)
+    fail_msg: >-
+      Audit key '{{ auditd_execve_key }}' is not loaded. If audit is locked (-e 2),
+      a reboot is required to load new rules.
+    success_msg: "Audit key '{{ auditd_execve_key }}' is active."
+  when: not ansible_check_mode
+
+- name: Verify the baseline rule keys are loaded
+  ansible.builtin.assert:
+    that:
+      - auditd_loaded.stdout is search(item)
+    fail_msg: "Audit key '{{ item }}' is not loaded (locked config? reboot needed)."
+    quiet: true
+  loop: "{{ auditd_verify_keys if auditd_baseline_enabled | bool else [] }}"
+  when: not ansible_check_mode

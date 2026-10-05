@@ -1,0 +1,33 @@
+---
+- name: Check that the audit syslog plugin config exists
+  ansible.builtin.stat:
+    path: "{{ auditd_syslog_plugin_conf }}"
+  register: auditd_plugin_stat
+
+- name: Fail clearly when the plugin config is missing
+  ansible.builtin.fail:
+    msg: >-
+      {{ auditd_syslog_plugin_conf }} does not exist. It is shipped by the auditd or
+      audispd-plugins package depending on the audit version (this is Ubuntu
+      {{ ansible_facts['distribution_version'] }}). Check "dpkg -S plugins.d/syslog.conf" and
+      that "universe" is enabled, or set
+      auditd_syslog_plugin_conf / auditd_syslog_forward in inventory.
+  when:
+    - not auditd_plugin_stat.stat.exists
+    - not ansible_check_mode
+
+- name: Enable auditd syslog plugin
+  ansible.builtin.lineinfile:
+    path: "{{ auditd_syslog_plugin_conf }}"
+    regexp: '^\s*active\s*='
+    line: "active = yes"
+  notify: Restart auditd
+  when: auditd_plugin_stat.stat.exists
+
+- name: Send auditd events to syslog facility {{ auditd_syslog_facility }}
+  ansible.builtin.lineinfile:
+    path: "{{ auditd_syslog_plugin_conf }}"
+    regexp: '^\s*args\s*='
+    line: "args = LOG_INFO LOG_{{ auditd_syslog_facility | upper }}"
+  notify: Restart auditd
+  when: auditd_plugin_stat.stat.exists

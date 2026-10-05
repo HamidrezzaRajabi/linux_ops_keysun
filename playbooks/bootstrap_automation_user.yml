@@ -1,0 +1,54 @@
+---
+# Creates the key-only automation account used by every other playbook, so no password has
+# to live in an inventory. Run ONCE per host with an existing admin login that you TYPE IN:
+#
+#   ansible-playbook playbooks/bootstrap_automation_user.yml -e ansible_user=<existing_admin> -k -K \
+#       -e "automation_public_key='ssh-ed25519 AAAA... ansible_deploy@controller'" --limit test_server
+#
+# (-e ansible_user=... is needed because ansible_user in the inventory would otherwise win over -u;
+#  -k/-K prompt for the SSH and sudo passwords; -k needs sshpass on the controller.)
+# Then use the normal inventory (ansible_user: ansible_deploy + private key).
+- name: Bootstrap the automation account
+  hosts: linux_servers
+  become: true
+  vars:
+    automation_user: ansible
+    automation_keys: "{{ automation_public_keys | default([automation_public_key] if automation_public_key is defined else []) }}"
+  pre_tasks:
+    - name: Require at least one valid public key
+      ansible.builtin.assert:
+        that:
+          - automation_keys | length > 0
+          - automation_keys | reject('match', '^(ssh-ed25519|sk-ssh-ed25519@openssh\.com|ecdsa-sha2-nistp(256|384|521)) AAAA[0-9A-Za-z+/=]+( .*)?$') | list | length == 0
+        fail_msg: "Pass -e automation_public_key='<ed25519 public key>' (or automation_public_keys as a list)."
+        quiet: true
+
+  tasks:
+    - name: Create the automation account
+      ansible.builtin.user:
+        name: "{{ automation_user }}"
+        comment: "Ansible automation"
+        shell: /bin/bash
+        create_home: true
+        password: "*"
+        update_password: on_create
+        state: present
+
+    - name: Install its SSH key(s) (exclusive)
+      ansible.posix.authorized_key:
+        user: "{{ automation_user }}"
+        key: "{{ automation_keys | join('\n') }}"
+        exclusive: true
+        state: present
+
+    # No dot in the file name (sudo ignores sudoers.d files that contain one).
+    - name: Allow passwordless sudo for the automation account
+      ansible.builtin.copy:
+        content: |
+          # Managed by Ansible (bootstrap_automation_user.yml)
+          {{ automation_user }} ALL=(ALL) NOPASSWD: ALL
+        dest: "/etc/sudoers.d/{{ automation_user }}"
+        owner: root
+        group: root
+        mode: "0440"
+        validate: "visudo -cf %s"

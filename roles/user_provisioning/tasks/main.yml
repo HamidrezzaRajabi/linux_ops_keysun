@@ -1,0 +1,27 @@
+---
+- name: Validate the manifest before any host is changed
+  ansible.builtin.import_tasks: validate.yml
+  tags: [users, validate]
+
+- name: Provision or update present and disabled users
+  ansible.builtin.include_tasks: create_user.yml
+  loop: "{{ managed_users | selectattr('state', 'in', ['present', 'disabled']) | list }}"
+  loop_control:
+    loop_var: managed_user
+    label: "{{ managed_user.username }} ({{ managed_user.state }})"
+  tags: [users]
+
+- name: Revoke users marked absent in the manifest
+  ansible.builtin.include_tasks: revoke.yml
+  loop: "{{ managed_users | selectattr('state', 'equalto', 'absent') | list }}"
+  loop_control:
+    loop_var: managed_user
+    label: "{{ managed_user.username }}"
+  vars:
+    revoke_username: "{{ managed_user.username }}"
+  tags: [users]
+
+- name: Verify the result
+  ansible.builtin.import_tasks: verify.yml
+  when: not ansible_check_mode
+  tags: [users, verify]

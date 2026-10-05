@@ -1,0 +1,44 @@
+---
+- name: Install rsyslog
+  ansible.builtin.apt:
+    name: "{{ rsyslog_forward_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  tags: [packages]
+
+- name: Deploy rsyslog forwarding config
+  ansible.builtin.template:
+    src: 60-logstash.conf.j2
+    dest: "{{ rsyslog_forward_config_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart rsyslog
+  tags: [rsyslog]
+
+- name: Check whether rsyslogd is installed (it is not yet in check mode on a new host)
+  ansible.builtin.stat:
+    path: /usr/sbin/rsyslogd
+  register: rsyslog_forward_binary
+  tags: [rsyslog]
+
+# Runs before the handler restarts rsyslog, so a bad config stops the play first.
+- name: Validate rsyslog configuration
+  ansible.builtin.command: rsyslogd -N1
+  changed_when: false
+  check_mode: false
+  when: rsyslog_forward_binary.stat.exists
+  tags: [rsyslog]
+
+- name: Apply pending rsyslog changes before the service check
+  ansible.builtin.meta: flush_handlers
+  tags: [rsyslog]
+
+- name: Make sure rsyslog is enabled and running
+  ansible.builtin.service:
+    name: rsyslog
+    state: started
+    enabled: true
+  when: not ansible_check_mode or rsyslog_forward_binary.stat.exists
+  tags: [rsyslog, verify]

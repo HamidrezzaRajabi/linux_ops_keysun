@@ -1,0 +1,21 @@
+# {{ ansible_managed }}
+HISTTIMEFORMAT="{{ command_logging_histtimeformat }}"
+export HISTTIMEFORMAT
+
+if [ -n "$BASH_VERSION" ]; then
+    __log_command() {
+        local ret=$?
+        local cmd
+
+        cmd=$(fc -ln -1)
+
+        logger -p {{ command_logging_facility }}.info -t {{ command_logging_tag }} \
+{% raw %}
+            "user=$USER uid=$(id -u) pid=$$ source_ip=${SSH_CONNECTION%% *} command=$cmd"
+
+        return $ret
+    }
+
+    PROMPT_COMMAND="__log_command${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
+{% endraw %}
+fi

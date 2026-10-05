@@ -1,0 +1,12 @@
+---
+# Users, SSH keys, sudo, docker from inventories/<env>/group_vars/<group>/users.yml.
+#   ansible-playbook playbooks/users.yml --check --diff
+#   ansible-playbook playbooks/users.yml --limit test_server
+#   ansible-playbook playbooks/users.yml -e users_acknowledge_docker_risk=true   # only if a user has docker: true
+- name: Provision managed users
+  hosts: linux_servers
+  become: true
+  serial: "{{ rollout_batch | default(1) }}"
+  max_fail_percentage: 0
+  roles:
+    - { role: user_provisioning, tags: [users] }

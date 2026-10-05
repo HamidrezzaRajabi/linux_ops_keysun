@@ -1,0 +1,6 @@
+---
+# Ubuntu releases this project is written for. 26.04 ships sudo-rs, audit 4.x and
+# rsyslog 8.2512; the roles adapt (see README "Ubuntu 26.04").
+preflight_supported_ubuntu_versions: ["20.04", "22.04", "24.04", "26.04"]
+# Set true (e.g. -e preflight_allow_unsupported=true) to continue on other releases.
+preflight_allow_unsupported: false

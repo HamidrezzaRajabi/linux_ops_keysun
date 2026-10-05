@@ -1,0 +1,33 @@
+---
+# ---------------- Destination ----------------
+rsyslog_forward_host: "192.168.10.116"
+rsyslog_forward_port: 5514
+# udp is lossy and unauthenticated. For audit/auth logs prefer tcp (see docs/OPERATIONS.md).
+rsyslog_forward_proto: "udp"
+
+# ---------------- Packages / files ----------------
+rsyslog_forward_packages:
+  - rsyslog
+rsyslog_forward_config_file: /etc/rsyslog.d/60-logstash.conf
+rsyslog_forward_max_severity: 4          # forward severity <= 4 (warning and above)
+rsyslog_forward_queue_name: fwd_logstash
+rsyslog_forward_queue_max_disk: 500m
+rsyslog_forward_resume_interval: 10
+
+# Facilities always forwarded: audit events, bash command log, auth/sudo.
+rsyslog_forward_facilities:
+  - "{{ log_facility_audit | default('local5') }}"
+  - "{{ log_facility_commands | default('local6') }}"
+  - authpriv
+
+# Message substrings that are always forwarded
+rsyslog_forward_message_patterns:
+  - "Out of memory"
+  - "oom-kill"
+  - "Killed process"
+  - "Kernel panic"
+  - "segfault"
+  - "Call Trace"
+  - "blocked for more than"
+  - "I/O error"
+  - "Failed with result"

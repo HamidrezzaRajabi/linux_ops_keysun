@@ -1,0 +1,13 @@
+---
+# Settings shared by every role. Per-role tunables live in roles/*/defaults/main.yml;
+# override them here (or in group_vars/<group>/, host_vars/<host>/) only when needed.
+
+# Syslog facilities that tie the three logging roles together. They must match
+# between auditd (audit -> syslog), command_logging (bash log) and rsyslog_forward.
+log_facility_audit: local5
+log_facility_commands: local6
+
+# Where rsyslog_forward ships logs.
+rsyslog_forward_host: "192.168.10.116"
+rsyslog_forward_port: 5514
+rsyslog_forward_proto: udp

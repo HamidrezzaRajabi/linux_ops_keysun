@@ -1,0 +1,21 @@
+---
+- name: Install auditd packages
+  ansible.builtin.import_tasks: packages.yml
+  tags: [packages]
+
+- name: Configure the audit -> syslog plugin
+  ansible.builtin.import_tasks: syslog_plugin.yml
+  when: auditd_syslog_forward | bool
+  tags: [auditd]
+
+- name: Deploy audit rules
+  ansible.builtin.import_tasks: rules.yml
+  tags: [auditd]
+
+- name: Apply pending audit changes before verification
+  ansible.builtin.meta: flush_handlers
+  tags: [auditd, verify]
+
+- name: Verify auditd
+  ansible.builtin.import_tasks: verify.yml
+  tags: [verify]

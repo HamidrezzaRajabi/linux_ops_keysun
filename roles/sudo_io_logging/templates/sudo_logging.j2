@@ -1,0 +1,12 @@
+## {{ ansible_managed }}
+## Session I/O transcripts for sudo invocations (classic sudo only).
+{% if sudo_io_log_output | bool %}
+Defaults log_output
+{% endif %}
+{% if sudo_io_log_input | bool %}
+Defaults log_input
+{% endif %}
+Defaults iolog_dir="{{ sudo_io_dir }}"
+{% if sudo_io_logfile | length > 0 %}
+Defaults logfile="{{ sudo_io_logfile }}"
+{% endif %}

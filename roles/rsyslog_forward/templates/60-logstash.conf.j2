@@ -1,0 +1,34 @@
+# {{ ansible_managed }}
+template(name="LinuxJSON" type="list" option.jsonf="on") {
+    property(outname="timestamp" name="timereported" dateFormat="rfc3339" format="jsonf")
+    property(outname="hostname"  name="hostname"            format="jsonf")
+    property(outname="program"   name="programname"         format="jsonf")
+    property(outname="pid"       name="procid"              format="jsonf")
+    property(outname="severity"  name="syslogseverity-text" format="jsonf")
+    property(outname="facility"  name="syslogfacility-text" format="jsonf")
+    property(outname="message"   name="msg"                 format="jsonf")
+}
+
+if (
+    $syslogseverity <= {{ rsyslog_forward_max_severity }}
+{% for facility in rsyslog_forward_facilities %}
+    or $syslogfacility-text == "{{ facility }}"
+{% endfor %}
+{% for pattern in rsyslog_forward_message_patterns %}
+    or $msg contains "{{ pattern }}"
+{% endfor %}
+) then {
+    action(
+        type="omfwd"
+        target="{{ rsyslog_forward_host }}"
+        port="{{ rsyslog_forward_port }}"
+        protocol="{{ rsyslog_forward_proto }}"
+        template="LinuxJSON"
+        action.resumeRetryCount="-1"
+        action.resumeInterval="{{ rsyslog_forward_resume_interval }}"
+        queue.type="LinkedList"
+        queue.filename="{{ rsyslog_forward_queue_name }}"
+        queue.maxDiskSpace="{{ rsyslog_forward_queue_max_disk }}"
+        queue.saveOnShutdown="on"
+    )
+}

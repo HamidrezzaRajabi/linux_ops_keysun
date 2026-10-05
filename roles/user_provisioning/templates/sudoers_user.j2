@@ -1,0 +1,13 @@
+## {{ ansible_managed }}
+## User: {{ _name }}
+## Mode: {{ _sudo_mode }}
+{% if _sudo_mode == 'full' %}
+{{ _name }} ALL=(ALL) {{ 'NOPASSWD: ' if not _require_password else '' }}ALL
+{% elif _sudo_mode == 'scoped' %}
+{% if _commands | length > 0 %}
+{{ _name }} ALL=(ALL) {{ 'NOPASSWD: ' if not _require_password else '' }}{{ _commands | join(', ') }}
+{% else %}
+## scoped mode with no commands listed: intentionally grants nothing.
+## Add explicit commands to sudo.commands in the manifest to enable anything.
+{% endif %}
+{% endif %}

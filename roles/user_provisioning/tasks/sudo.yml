@@ -1,0 +1,38 @@
+---
+# One /etc/sudoers.d/<user> fragment per user, validated with visudo BEFORE it is put in
+# place. The file name has no dots: sudo silently ignores sudoers.d files whose name
+# contains a "." (so "john.doe" becomes "john_doe"). Works with classic sudo and sudo-rs.
+- name: "Work out the sudo policy for {{ _name }}"
+  vars:
+    _sudo: "{{ managed_user.sudo | default({}) }}"
+    _sudo_on: "{{ _sudo.enabled | default(false) | bool }}"
+    _sudo_mode: "{{ _sudo.mode | default('none') }}"
+    _commands: "{{ _sudo.commands | default([]) }}"
+    _require_password: "{{ _sudo.require_password | default(true) | bool }}"
+    _grant: "{{ _present and _sudo_on and _sudo_mode != 'none' }}"
+    _fragment: "{{ users_sudoers_dir }}/{{ _name | regex_replace('[^a-z0-9_-]', '_') }}"
+  block:
+    - name: "Warn: unrestricted (full) sudo for {{ _name }}"
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: {{ _name }} gets sudo mode 'full' (unrestricted root) on {{ inventory_hostname }}.
+          Confirm this is a deliberate, reviewed grant.
+      when:
+        - _grant
+        - _sudo_mode == 'full'
+
+    - name: "Deploy sudoers fragment for {{ _name }}"
+      ansible.builtin.template:
+        src: sudoers_user.j2
+        dest: "{{ _fragment }}"
+        owner: root
+        group: root
+        mode: "{{ users_sudoers_fragment_mode }}"
+        validate: "visudo -cf %s"
+      when: _grant
+
+    - name: "Remove sudoers fragment for {{ _name }} (no sudo, disabled, or mode none)"
+      ansible.builtin.file:
+        path: "{{ _fragment }}"
+        state: absent
+      when: not _grant

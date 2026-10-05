@@ -1,0 +1,9 @@
+---
+# Everything, in the same order as the old project: log forwarding -> audit -> users.
+# Each concern is its own playbook and can be run alone (see README).
+#   ansible-playbook playbooks/site.yml --check --diff
+#   ansible-playbook playbooks/site.yml --limit test_server
+#   ansible-playbook playbooks/site.yml --tags users
+- ansible.builtin.import_playbook: logging.yml
+- ansible.builtin.import_playbook: audit.yml
+- ansible.builtin.import_playbook: users.yml

@@ -1,0 +1,3 @@
+## {{ ansible_managed }}
+-a always,exit -F arch=b64 -S execve -F auid>={{ auditd_min_auid }} -F auid!=-1 -k {{ auditd_execve_key }}
+-a always,exit -F arch=b32 -S execve -F auid>={{ auditd_min_auid }} -F auid!=-1 -k {{ auditd_execve_key }}

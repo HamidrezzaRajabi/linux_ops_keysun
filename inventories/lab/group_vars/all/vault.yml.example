@@ -1,0 +1,14 @@
+# This file is a TEMPLATE. In real use:
+#   cp vault.yml.example vault.yml
+#   ansible-vault encrypt vault.yml
+#
+# Only put things here that are genuinely secret. SSH public keys are NOT
+# secret and belong in users.yml.
+#
+# Nothing in the current roles needs a secret yet: log shipping goes to Logstash
+# over rsyslog (linux_logging role) with no credentials. Example for later:
+# service_account_password: "CHANGE_ME"   # only if some legacy system truly requires one
+#
+# Reference vaulted values from plaintext files by name, e.g. in
+# group_vars/all/something.yml:
+#   some_secret: "{{ service_account_password }}"

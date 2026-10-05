@@ -1,0 +1,5 @@
+---
+command_logging_script: /etc/profile.d/lnxcmd-audit.sh
+command_logging_facility: "{{ log_facility_commands | default('local6') }}"
+command_logging_tag: LnxCmd
+command_logging_histtimeformat: "%F %T "

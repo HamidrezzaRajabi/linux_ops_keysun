@@ -1,0 +1,13 @@
+*.retry
+.vault_pass*
+**/vault.yml
+!**/vault.yml.example
+.ansible/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+*.log
+.vscode/
+.idea/

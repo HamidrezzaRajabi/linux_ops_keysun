@@ -1,0 +1,28 @@
+---
+- name: Assert the host is a supported Ubuntu release
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Ubuntu'
+      - ansible_facts['distribution_version'] in preflight_supported_ubuntu_versions
+    fail_msg: >-
+      Unsupported OS {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}.
+      Supported Ubuntu releases: {{ preflight_supported_ubuntu_versions | join(', ') }}.
+      Use -e preflight_allow_unsupported=true to override.
+    quiet: true
+  when: not (preflight_allow_unsupported | bool)
+  tags: [always]
+
+- name: Detect which sudo implementation is installed
+  ansible.builtin.command: sudo --version
+  register: preflight_sudo_version
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  tags: [always]
+
+# sudo-rs (default on Ubuntu 26.04) rejects logfile/log_input/log_output in sudoers.
+- name: Record the sudo implementation (sudo or sudo-rs)
+  ansible.builtin.set_fact:
+    preflight_sudo_impl: >-
+      {{ 'sudo-rs' if (preflight_sudo_version.stdout_lines | default([]) | first | default('')) is search('sudo-rs') else 'sudo' }}
+  tags: [always]

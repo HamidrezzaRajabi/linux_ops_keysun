@@ -1,0 +1,13 @@
+---
+# auditd rules + audit->syslog, and sudo session I/O logging (classic sudo only).
+#   ansible-playbook playbooks/audit.yml --check --diff
+#   ansible-playbook playbooks/audit.yml --tags auditd         # or: sudo, packages, verify
+#   ansible-playbook playbooks/audit.yml -e auditd_lock_config=true   # see docs/OPERATIONS.md first
+- name: Audit baseline
+  hosts: linux_servers
+  become: true
+  serial: "{{ rollout_batch | default(1) }}"
+  max_fail_percentage: 0
+  roles:
+    - { role: auditd, tags: [audit] }
+    - { role: sudo_io_logging, tags: [audit, sudo] }

@@ -1,0 +1,46 @@
+---
+- name: Check that the complete sudoers configuration still parses
+  ansible.builtin.command: visudo -c
+  changed_when: false
+  check_mode: false
+
+- name: Re-read the account database
+  ansible.builtin.getent:
+    database: passwd
+
+- name: Assert managed accounts exist and disabled ones cannot log in
+  ansible.builtin.assert:
+    that:
+      - item.username in ansible_facts['getent_passwd']
+      - item.state != 'disabled' or ansible_facts['getent_passwd'][item.username][5] in ['/usr/sbin/nologin', '/sbin/nologin', '/bin/false']
+    fail_msg: "Account state of '{{ item.username }}' does not match the manifest (state={{ item.state }})."
+    quiet: true
+  loop: "{{ managed_users | selectattr('state', 'in', ['present', 'disabled']) | list }}"
+  loop_control:
+    label: "{{ item.username }}"
+
+- name: Ask sshd what it would apply to each present user
+  ansible.builtin.command:
+    argv: [sshd, -T, -C, "user={{ item.username }},host=localhost,addr=127.0.0.1"]
+  register: users_sshd_effective
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  loop: "{{ managed_users | selectattr('state', 'equalto', 'present') | list }}"
+  loop_control:
+    label: "{{ item.username }}"
+  when: users_verify_sshd | bool
+
+# Passes when there is no AllowUsers, the user is listed, or a pattern (* ? @) could match.
+- name: Assert sshd's AllowUsers does not exclude a present user
+  ansible.builtin.assert:
+    that:
+      - _allow | length == 0 or item.item.username in _allow or (_allow | select('search', '[*?@]') | list | length > 0)
+    fail_msg: "sshd AllowUsers on {{ inventory_hostname }} does not include '{{ item.item.username }}'; they could not log in."
+    quiet: true
+  loop: "{{ users_sshd_effective.results | default([]) | selectattr('rc', 'defined') | selectattr('rc', 'equalto', 0) | list }}"
+  loop_control:
+    label: "{{ item.item.username }}"
+  vars:
+    _allow: "{{ item.stdout_lines | select('match', '^allowusers ') | map('regex_replace', '^allowusers ', '') | join(' ') | split }}"
+  when: users_verify_sshd | bool

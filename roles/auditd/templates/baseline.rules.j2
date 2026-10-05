@@ -1,0 +1,46 @@
+## {{ ansible_managed }}
+## See docs/DESIGN.md for what this can and can't guarantee.
+##
+## Not in this file on purpose: execve auditing of logged-in users
+## (key user_commands) lives in execve.rules (same role).
+
+## Watch identity & privilege-escalation config for tampering
+-w /etc/passwd -p wa -k identity
+-w /etc/shadow -p wa -k identity
+-w /etc/group -p wa -k identity
+-w /etc/gshadow -p wa -k identity
+-w /etc/sudoers -p wa -k privilege_escalation
+-w /etc/sudoers.d/ -p wa -k privilege_escalation
+-w /etc/ssh/sshd_config -p wa -k sshd_config
+-w /etc/ssh/sshd_config.d/ -p wa -k sshd_config
+
+## Watch PAM config (auth stack tampering)
+-w /etc/pam.d/ -p wa -k pam_config
+-w /etc/security/ -p wa -k pam_config
+-w /etc/login.defs -p wa -k identity
+
+## Watch the log pipeline itself (rsyslog forwarding to Logstash and the
+## bash command-log hook in /etc/profile.d). Low volume: only fires on edits.
+-w /etc/rsyslog.conf -p wa -k logging_config
+-w /etc/rsyslog.d/ -p wa -k logging_config
+-w /etc/profile.d/ -p wa -k logging_config
+
+## Clock changes by logged-in users (hides when things happened).
+## auid filter keeps chrony/timesyncd out of the logs.
+-a always,exit -F arch=b64 -S adjtimex,settimeofday,clock_settime -F auid>={{ auditd_baseline_min_auid }} -F auid!=-1 -k time_change
+-a always,exit -F arch=b32 -S adjtimex,settimeofday,clock_settime -F auid>={{ auditd_baseline_min_auid }} -F auid!=-1 -k time_change
+
+## Kernel module load/unload by logged-in users (rootkit vector)
+-a always,exit -F arch=b64 -S init_module,finit_module,delete_module -F auid>={{ auditd_baseline_min_auid }} -F auid!=-1 -k kernel_modules
+-a always,exit -F arch=b32 -S init_module,finit_module,delete_module -F auid>={{ auditd_baseline_min_auid }} -F auid!=-1 -k kernel_modules
+{% if auditd_log_root_execve | bool %}
+
+## Every command executed with euid=0 (cron, daemons, sudo). Noisy at scale.
+-a always,exit -F arch=b64 -F euid=0 -S execve -k root_execve
+-a always,exit -F arch=b32 -F euid=0 -S execve -k root_execve
+{% endif %}
+
+## Make the audit trail itself harder to blindly disable
+-w /etc/audit/ -p wa -k audit_config
+-w /sbin/auditctl -p x -k audit_tools
+-w /sbin/auditd -p x -k audit_tools

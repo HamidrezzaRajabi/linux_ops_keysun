@@ -1,0 +1,21 @@
+---
+- name: Restart auditd
+  ansible.builtin.service:
+    name: "{{ auditd_service }}"
+    state: restarted
+
+# Both handlers listen to one topic. Exactly one of them acts.
+- name: Load audit rules
+  ansible.builtin.command: augenrules --load
+  changed_when: true
+  when: not (auditd_locked | default(false) | bool)
+  listen: auditd rules changed
+
+- name: Report that a reboot is needed to load audit rules
+  ansible.builtin.fail:
+    msg: >-
+      Audit rules were written to {{ auditd_rules_dir }} but the kernel audit config is
+      locked (-e 2), so they cannot be loaded now. Reboot {{ inventory_hostname }} to
+      apply them (or reboot first, then re-run with -e auditd_lock_config=false to unlock).
+  when: auditd_locked | default(false) | bool
+  listen: auditd rules changed

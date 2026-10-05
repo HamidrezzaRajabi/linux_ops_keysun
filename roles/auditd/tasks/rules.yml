@@ -1,0 +1,73 @@
+---
+# Is the kernel audit config already locked (-e 2)? Decides whether rule changes can load now.
+- name: Read the kernel audit status
+  ansible.builtin.command: auditctl -s
+  register: auditd_status
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Record whether the audit config is locked
+  ansible.builtin.set_fact:
+    auditd_locked: "{{ auditd_status.rc == 0 and auditd_status.stdout is search('enabled\\s+2') }}"
+
+- name: Remove rule files written by older versions of this project
+  ansible.builtin.file:
+    path: "{{ auditd_rules_dir }}/{{ item }}"
+    state: absent
+  loop: "{{ auditd_legacy_rules_files }}"
+  notify: auditd rules changed
+
+- name: Deploy the "delete existing rules" file
+  ansible.builtin.template:
+    src: clear.rules.j2
+    dest: "{{ auditd_rules_dir }}/{{ auditd_clear_rules_file }}"
+    owner: root
+    group: root
+    mode: "0640"
+  notify: auditd rules changed
+  when: auditd_clear_rules | bool
+
+- name: Deploy baseline audit rules (identity/sudo/sshd/log-pipeline watches, time and module changes)
+  ansible.builtin.template:
+    src: baseline.rules.j2
+    dest: "{{ auditd_rules_dir }}/{{ auditd_baseline_rules_file }}"
+    owner: root
+    group: root
+    mode: "0640"
+  notify: auditd rules changed
+  when: auditd_baseline_enabled | bool
+
+- name: Deploy auditd execve rules
+  ansible.builtin.template:
+    src: execve.rules.j2
+    dest: "{{ auditd_rules_dir }}/{{ auditd_execve_rules_file }}"
+    owner: root
+    group: root
+    mode: "0640"
+  notify: auditd rules changed
+
+# The lock lives in its own file so it always loads LAST ("zz-" sorts after everything,
+# including Ubuntu's stock audit.rules).
+- name: Lock audit configuration until reboot (tamper deterrent)
+  ansible.builtin.template:
+    src: lock.rules.j2
+    dest: "{{ auditd_rules_dir }}/{{ auditd_lock_rules_file }}"
+    owner: root
+    group: root
+    mode: "0640"
+  notify: auditd rules changed
+  when: auditd_lock_config | bool
+
+- name: Remove the audit lock file when locking is disabled
+  ansible.builtin.file:
+    path: "{{ auditd_rules_dir }}/{{ auditd_lock_rules_file }}"
+    state: absent
+  when: not (auditd_lock_config | bool)
+  # A kernel that is already locked only unlocks after a reboot.
+
+- name: Make sure auditd is enabled and running
+  ansible.builtin.service:
+    name: "{{ auditd_service }}"
+    state: started
+    enabled: true

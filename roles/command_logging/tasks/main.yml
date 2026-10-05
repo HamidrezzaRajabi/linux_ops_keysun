@@ -1,0 +1,9 @@
+---
+- name: Deploy Bash command logging script
+  ansible.builtin.template:
+    src: lnxcmd-audit.sh.j2
+    dest: "{{ command_logging_script }}"
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [bash]

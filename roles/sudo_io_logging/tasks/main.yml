@@ -1,0 +1,10 @@
+---
+- name: Skip sudo I/O logging on sudo-rs, or fail if it is mandatory
+  ansible.builtin.include_tasks: sudo_rs.yml
+  when: preflight_sudo_impl == 'sudo-rs'
+
+- name: Configure sudo I/O logging (classic sudo)
+  ansible.builtin.include_tasks: classic_sudo.yml
+  when:
+    - preflight_sudo_impl != 'sudo-rs'
+    - sudo_io_logging_enabled | bool

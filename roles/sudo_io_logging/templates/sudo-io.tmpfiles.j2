@@ -1,0 +1,3 @@
+# {{ ansible_managed }}
+# Create the sudo I/O log dir and prune transcripts older than the retention period.
+d {{ sudo_io_dir }} 0700 root root {{ sudo_io_retention_days }}d

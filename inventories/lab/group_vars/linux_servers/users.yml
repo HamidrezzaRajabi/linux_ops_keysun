@@ -1,0 +1,49 @@
+---
+# Managed users for this group. Not secret: SSH keys are public keys.
+# Anything sensitive goes in group_vars/all/vault.yml (ansible-vault encrypted).
+#
+# state:      present | disabled | absent   (required)
+#             absent  = revoke (lock + expire + strip keys/groups/sudo); the account
+#                       is only deleted with -e users_purge=true
+# ssh_public_keys: list of public keys (the legacy single `ssh_public_key:` still works)
+# sudo.mode:  full | scoped | none
+# docker:     root-equivalent; needs -e users_acknowledge_docker_risk=true
+# groups:     extra supplementary groups. sudo/admin/adm/docker/lxd/disk/shadow/root
+#             are refused here on purpose; use sudo: and docker: instead.
+
+managed_users:
+  - username: mahyar
+    full_name: "Mahyar Rajabi"
+    state: present
+    ssh_public_keys:
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDoM/LgfS3EPylK7is94/ewn2DbtVQ5/sbcKVJw444Xs mahyar@H-Rajabi"
+    sudo:
+      enabled: true
+      mode: full
+      require_password: false
+    docker: false
+    shell: /bin/bash
+    groups: []
+
+# Examples (uncomment and edit):
+#  - username: alice
+#    full_name: "Alice Example"
+#    state: present
+#    ssh_public_keys:
+#      - "ssh-ed25519 AAAA... alice@laptop"
+#    sudo:
+#      enabled: true
+#      mode: scoped
+#      require_password: false
+#      commands:                       # absolute paths; pass explicit arguments
+#        - /usr/bin/systemctl restart nginx
+#        - /usr/bin/systemctl status nginx --no-pager   # --no-pager: a pager can spawn a root shell
+#      # Do NOT scope /usr/bin/docker here: docker via sudo is root.
+#    docker: false
+#
+#  - username: bob
+#    state: disabled        # keeps the account, removes keys and sudo, nologin shell
+#    ssh_public_keys: []
+#
+#  - username: carol
+#    state: absent          # revoked (locked/expired); delete with -e users_purge=true

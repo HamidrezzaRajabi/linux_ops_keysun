@@ -1,0 +1,28 @@
+---
+# Fast, targeted revocation, independent of the manifest. change_ref is required so the
+# syslog line (authpriv, forwarded off-host) says why.
+#   ansible-playbook playbooks/users_revoke.yml -e target_user=bob -e change_ref=INC-123 --check --diff
+#   ansible-playbook playbooks/users_revoke.yml -e target_user=bob -e change_ref=INC-123
+# Optional: -e users_purge=true (deletes the account afterwards), -e revoke_hosts=<group or host>
+- name: Revoke a user's access
+  hosts: "{{ revoke_hosts | default('linux_servers') }}"
+  become: true
+  pre_tasks:
+    - name: Require target_user and change_ref
+      ansible.builtin.assert:
+        that:
+          - target_user is defined
+          - target_user | length > 0
+          - change_ref is defined
+          - change_ref | length > 0
+        fail_msg: "Pass -e target_user=<username> -e change_ref=<ticket or reason>."
+        quiet: true
+      run_once: true
+
+  tasks:
+    - name: Revoke target_user
+      ansible.builtin.include_role:
+        name: user_provisioning
+        tasks_from: revoke
+      vars:
+        revoke_username: "{{ target_user }}"

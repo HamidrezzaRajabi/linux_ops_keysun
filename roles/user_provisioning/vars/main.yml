@@ -1,0 +1,10 @@
+---
+# Constants used by validation. Tunables live in defaults/main.yml.
+users_valid_states: [present, disabled, absent]
+users_valid_sudo_modes: [full, scoped, none]
+# Linux account names; dots allowed. The sudoers fragment name is sanitised separately.
+users_username_regex: '^[a-z_][a-z0-9_.-]{0,31}$'
+# "<type> <base64> [comment]" -- key options (from=, command=) are refused on purpose.
+users_ssh_key_regex: '^\S+ AAAA[0-9A-Za-z+/=]+( .*)?$'
+# Absolute path, no comma / newline / # (they would change what sudoers means).
+users_sudo_command_regex: '^/[^,\n#]*$'

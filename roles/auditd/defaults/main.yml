@@ -1,0 +1,52 @@
+---
+# ---------------- Packages / service ----------------
+# audispd-plugins is in Ubuntu "universe" (also on 26.04). Where the syslog plugin
+# config ships (auditd vs audispd-plugins) differs between audit 2.8/3.x/4.x, so both
+# are installed; the role fails with a clear message if the plugin config is missing.
+auditd_packages:
+  - auditd
+  - audispd-plugins
+auditd_service: auditd
+
+# ---------------- audit -> syslog plugin ----------------
+auditd_syslog_forward: true
+auditd_syslog_plugin_conf: /etc/audit/plugins.d/syslog.conf
+auditd_syslog_facility: "{{ log_facility_audit | default('local5') }}"
+
+# ---------------- Rules (files in /etc/audit/rules.d) ----------------
+# augenrules merges rules.d/*.rules alphabetically. Ubuntu's stock audit.rules starts with
+# "-D" (delete all rules), so every file that carries real rules must sort AFTER it:
+# keep names unnumbered/alphabetical (baseline, execve, zz-finalize). Digit-prefixed
+# names would be wiped by the stock "-D". 00-clear.rules only holds a "-D" so reloads
+# never hit "Rule exists", even when a release does not ship the stock file.
+auditd_rules_dir: /etc/audit/rules.d
+auditd_clear_rules: true
+auditd_clear_rules_file: 00-clear.rules
+auditd_baseline_rules_file: baseline.rules
+auditd_execve_rules_file: execve.rules
+auditd_lock_rules_file: zz-finalize.rules
+# Files written by older versions of this project; removed when present.
+auditd_legacy_rules_files:
+  - user-provisioning.rules
+
+# execve auditing of logged-in users (key user_commands). Same as the old linux_logging role.
+auditd_execve_key: user_commands
+auditd_min_auid: 1000
+
+# Baseline watches (identity, sudo, sshd, PAM, log pipeline, clock, kernel modules).
+auditd_baseline_enabled: true
+auditd_baseline_min_auid: "{{ auditd_min_auid }}"
+# Every euid=0 execve (key root_execve). Noisy: daemons and cron. OFF by default.
+auditd_log_root_execve: false
+
+# Keys asserted in "auditctl -l" after a change (set [] to skip).
+auditd_verify_keys:
+  - identity
+  - privilege_escalation
+  - sshd_config
+  - pam_config
+  - logging_config
+  - audit_config
+
+# Lock the audit config until reboot (-e 2). OFF by default; see docs/OPERATIONS.md.
+auditd_lock_config: false

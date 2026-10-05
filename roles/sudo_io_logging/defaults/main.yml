@@ -1,0 +1,23 @@
+---
+sudo_io_logging_enabled: true
+sudo_io_fragment: /etc/sudoers.d/00-io-logging
+sudo_io_dir: /var/log/sudo-io
+
+# Typed input can contain passwords (e.g. "sudo mysql -p"), so input logging is OFF by
+# default. Output logging is the useful part for reviewing what a session did.
+sudo_io_log_output: true
+sudo_io_log_input: false
+
+# sudo already writes who-ran-what to syslog (authpriv), which rsyslog_forward ships.
+# A separate sudo.log is therefore off by default.
+sudo_io_logfile: ""        # e.g. /var/log/sudo.log
+
+# Session transcripts older than this are removed by systemd-tmpfiles (daily).
+sudo_io_retention_days: 30
+sudo_io_tmpfiles_file: /etc/tmpfiles.d/sudo-io.conf
+
+# sudo-rs rejects these settings: "visudo -c" fails and sudo may refuse to run.
+# true  = delete a fragment left behind by an earlier run (e.g. after a 24.04 -> 26.04 upgrade)
+sudo_io_remove_fragment_on_sudo_rs: true
+# true  = fail instead of skipping when sudo-rs is found (use when transcripts are mandatory)
+sudo_io_require_io_logging: false

@@ -1,0 +1,12 @@
+---
+# Log forwarding to Logstash (rsyslog) and bash command logging.
+#   ansible-playbook playbooks/logging.yml --check --diff
+#   ansible-playbook playbooks/logging.yml --tags rsyslog      # or: bash, packages, verify
+- name: Log forwarding and command logging
+  hosts: linux_servers
+  become: true
+  serial: "{{ rollout_batch | default(1) }}"
+  max_fail_percentage: 0
+  roles:
+    - { role: rsyslog_forward, tags: [logging] }
+    - { role: command_logging, tags: [logging] }

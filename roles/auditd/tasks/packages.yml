@@ -1,0 +1,7 @@
+---
+- name: Install auditd and the audit dispatcher plugins
+  ansible.builtin.apt:
+    name: "{{ auditd_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600

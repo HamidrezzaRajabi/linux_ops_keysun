@@ -1,0 +1,21 @@
+---
+- name: Fail when I/O logging is mandatory but sudo-rs cannot do it
+  ansible.builtin.fail:
+    msg: >-
+      {{ inventory_hostname }} uses sudo-rs, which has no I/O logging (logfile, log_input and
+      log_output are rejected). Install classic sudo or set sudo_io_require_io_logging: false.
+  when: sudo_io_require_io_logging | bool
+
+- name: Remove an I/O logging fragment that sudo-rs would reject
+  ansible.builtin.file:
+    path: "{{ sudo_io_fragment }}"
+    state: absent
+  when: sudo_io_remove_fragment_on_sudo_rs | bool
+
+- name: Explain what replaces I/O logging on sudo-rs
+  ansible.builtin.debug:
+    msg: >-
+      sudo-rs detected on {{ inventory_hostname }}: sudo session transcripts are not available.
+      Who ran what via sudo is still in syslog (authpriv, forwarded by rsyslog_forward) and
+      every command of a logged-in user is covered by the auditd execve rule.
+  run_once: true

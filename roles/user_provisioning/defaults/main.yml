@@ -1,0 +1,49 @@
+---
+# The manifest. Define it in inventories/<env>/group_vars/<group>/users.yml.
+managed_users: []
+
+# docker group == root. Refused unless acknowledged (-e users_acknowledge_docker_risk=true).
+# The old names acknowledge_docker_risk / purge are still honoured.
+users_acknowledge_docker_risk: "{{ acknowledge_docker_risk | default(false) }}"
+# Revocation locks and expires; it only deletes the account when this is true.
+users_purge: "{{ purge | default(false) }}"
+
+users_default_shell: /bin/bash
+users_home_dir_mode: "0750"
+users_ssh_dir_mode: "0700"
+users_authorized_keys_mode: "0600"
+users_sudoers_fragment_mode: "0440"
+users_sudoers_dir: /etc/sudoers.d
+
+# false: groups are only ADDED (docker is still removed when not granted).
+# true : the manifest is the complete list of supplementary groups for managed users.
+#        Preview with --check --diff first: it strips any group not in the manifest.
+users_exclusive_groups: false
+
+# Privileges that must come from sudo: / docker:, never from groups:.
+users_forbidden_groups: [sudo, admin, root, adm, docker, lxd, disk, shadow]
+
+# Accepted public key types. ssh-rsa is intentionally not listed.
+users_allowed_key_types:
+  - ssh-ed25519
+  - sk-ssh-ed25519@openssh.com
+  - ecdsa-sha2-nistp256
+  - ecdsa-sha2-nistp384
+  - ecdsa-sha2-nistp521
+  - sk-ecdsa-sha2-nistp256@openssh.com
+
+# Accounts that can never be managed or revoked here. The account Ansible connects as is
+# added automatically, so the run can never lock itself out.
+users_protected_accounts: [root]
+users_connection_account: "{{ ansible_user | default(ansible_facts.get('env', {}).get('SUDO_USER', '')) }}"
+users_min_uid: 1000
+
+# This project never sets passwords, so "sudo with a password" cannot work. Allow it only
+# if you set passwords outside Ansible (LDAP, passwd).
+users_allow_password_sudo: false
+
+# sshd also reads ~/.ssh/authorized_keys2 by default; remove it so keys exist in one place.
+users_remove_authorized_keys2: true
+
+# After a run, ask sshd whether AllowUsers would reject a managed user.
+users_verify_sshd: true

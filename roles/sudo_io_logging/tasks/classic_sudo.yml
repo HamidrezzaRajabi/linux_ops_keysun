@@ -1,0 +1,25 @@
+---
+- name: Ensure sudo I/O log directory exists with restrictive permissions
+  ansible.builtin.file:
+    path: "{{ sudo_io_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Prune old sudo I/O transcripts (systemd-tmpfiles)
+  ansible.builtin.template:
+    src: sudo-io.tmpfiles.j2
+    dest: "{{ sudo_io_tmpfiles_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Configure sudo I/O session logging
+  ansible.builtin.template:
+    src: sudo_logging.j2
+    dest: "{{ sudo_io_fragment }}"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: "visudo -cf %s"

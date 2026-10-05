@@ -1,0 +1,98 @@
+---
+# One manifest entry with state present or disabled (loop_var: managed_user).
+# Everything below is idempotent on its own, so re-running is always safe.
+- name: "Manage account {{ managed_user.username }}"
+  vars:
+    _name: "{{ managed_user.username }}"
+    _state: "{{ managed_user.state }}"
+    _present: "{{ managed_user.state == 'present' }}"
+    _keys: "{{ managed_user.ssh_public_keys | default([managed_user.ssh_public_key] if managed_user.ssh_public_key is defined else []) }}"
+    _wants_docker: "{{ _present and (managed_user.docker | default(false) | bool) }}"
+    _managed_groups: "{{ managed_user.groups | default([]) }}"
+    _extra_groups: "{{ _managed_groups + (['docker'] if _wants_docker else []) }}"
+    # Existing record (None when the account does not exist yet).
+    _acct: "{{ ansible_facts['getent_passwd'][_name] | default(none) }}"
+    _acct_exists: "{{ _acct is not none }}"
+    _current_groups: "{{ (users_id_all.stdout.split() | difference(users_id_primary.stdout.split())) if users_id_all.rc == 0 else [] }}"
+    # Exclusive: the manifest is the full list. Otherwise only add, but always drop docker unless granted.
+    _groups_target: >-
+      {{ (_extra_groups | unique | list) if (users_exclusive_groups | bool)
+         else ((_current_groups + _extra_groups) | unique | difference([] if _wants_docker else ['docker']) | list) }}
+    # Home directory: the existing record, or what the user module reports for a new account.
+    _home: "{{ _acct[4] if _acct_exists else (users_account.home | default('')) }}"
+    # In --check mode a brand-new account does not exist yet, so tasks that need it are skipped.
+    _manageable: "{{ (_home | length > 0) and (not ansible_check_mode or _acct_exists) }}"
+  block:
+    - name: "Look up {{ _name }}"
+      ansible.builtin.getent:
+        database: passwd
+        key: "{{ _name }}"
+        fail_key: false
+
+    - name: "Read current groups of {{ _name }}"
+      ansible.builtin.command:
+        argv: [id, -Gn, "--", "{{ _name }}"]
+      register: users_id_all
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: "Read primary group of {{ _name }}"
+      ansible.builtin.command:
+        argv: [id, -gn, "--", "{{ _name }}"]
+      register: users_id_primary
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Check that the docker group exists
+      ansible.builtin.getent:
+        database: group
+        key: docker
+        fail_key: false
+      when: _wants_docker
+
+    - name: Fail clearly when docker is requested but not installed
+      ansible.builtin.fail:
+        msg: >-
+          {{ _name }} requests docker: true but the docker group does not exist on
+          {{ inventory_hostname }}. Install Docker first (it creates the group).
+      when:
+        - _wants_docker
+        - ansible_facts['getent_group']['docker'] is none
+
+    - name: "Warn: docker group is root-equivalent ({{ _name }})"
+      ansible.builtin.debug:
+        msg: >-
+          GRANTING ROOT-EQUIVALENT ACCESS: adding {{ _name }} to the docker group on {{ inventory_hostname }}.
+      when: _wants_docker
+
+    - name: "Create or update account for {{ _name }}"
+      ansible.builtin.user:
+        name: "{{ _name }}"
+        comment: "{{ managed_user.full_name | default(_name) }}"
+        shell: "{{ '/usr/sbin/nologin' if _state == 'disabled' else (managed_user.shell | default(users_default_shell)) }}"
+        groups: "{{ _groups_target | join(',') }}"
+        append: false
+        create_home: true
+        # "*" instead of the default "!" keeps key login working even if sshd later runs with UsePAM no.
+        password: "*"
+        update_password: on_create
+        expires: "{{ -1 if _present else 0 }}"
+        password_lock: "{{ true if _state == 'disabled' else omit }}"
+        state: present
+      register: users_account
+
+    - name: "Enforce home directory permissions for {{ _name }}"
+      ansible.builtin.file:
+        path: "{{ _home }}"
+        state: directory
+        owner: "{{ _name }}"
+        mode: "{{ users_home_dir_mode }}"
+      when: _manageable
+
+    - name: "SSH keys for {{ _name }}"
+      ansible.builtin.include_tasks: ssh_key.yml
+
+    - name: "Sudo policy for {{ _name }}"
+      ansible.builtin.include_tasks: sudo.yml

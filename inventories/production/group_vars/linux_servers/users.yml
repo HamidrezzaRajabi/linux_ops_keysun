@@ -1,0 +1,3 @@
+---
+# Production user manifest. Same schema as inventories/lab/group_vars/linux_servers/users.yml.
+managed_users: []

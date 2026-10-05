@@ -1,0 +1,80 @@
+---
+# Complete, repeatable revocation of revoke_username (caller sets it; optional change_ref).
+# Locks + expires instead of deleting, so file ownership is not orphaned. Deleting happens
+# only with users_purge=true. Failures are NOT ignored: a revocation that did not work must be loud.
+- name: "Revoke {{ revoke_username }}"
+  vars:
+    _acct: "{{ ansible_facts['getent_passwd'][revoke_username] | default(none) }}"
+    _home: "{{ _acct[4] if _acct is not none else '' }}"
+  block:
+    - name: "Look up {{ revoke_username }}"
+      ansible.builtin.getent:
+        database: passwd
+        key: "{{ revoke_username }}"
+        fail_key: false
+
+    - name: Refuse to revoke protected accounts
+      ansible.builtin.assert:
+        that:
+          - revoke_username is match(users_username_regex)
+          - revoke_username not in ([users_connection_account] + users_protected_accounts)
+          - _acct is none or (_acct[1] | int) >= (users_min_uid | int)
+        fail_msg: >-
+          Refusing to revoke '{{ revoke_username }}': it is root, the account Ansible connects as
+          ({{ users_connection_account }}), a system account (uid < {{ users_min_uid }}), or not a valid username.
+        quiet: true
+
+    - name: "Remove authorized_keys files of {{ revoke_username }}"
+      ansible.builtin.file:
+        path: "{{ _home }}/.ssh/{{ item }}"
+        state: absent
+      loop: [authorized_keys, authorized_keys2]
+      register: users_revoke_keys
+      when: _home | length > 0
+
+    - name: "Remove sudoers fragment of {{ revoke_username }}"
+      ansible.builtin.file:
+        path: "{{ users_sudoers_dir }}/{{ revoke_username | regex_replace('[^a-z0-9_-]', '_') }}"
+        state: absent
+      register: users_revoke_sudo
+
+    - name: "End running processes and sessions of {{ revoke_username }}"
+      ansible.builtin.command:
+        argv: [pkill, -KILL, -u, "{{ revoke_username }}"]
+      register: users_revoke_kill
+      changed_when: users_revoke_kill.rc == 0
+      failed_when: users_revoke_kill.rc not in [0, 1]   # 1 = nothing to kill
+      when: _acct is not none
+
+    - name: "Strip groups, set nologin, lock and expire {{ revoke_username }}"
+      ansible.builtin.user:
+        name: "{{ revoke_username }}"
+        groups: ""
+        append: false
+        shell: /usr/sbin/nologin
+        password_lock: true
+        expires: 0
+      register: users_revoke_account
+      when: _acct is not none
+
+    - name: "Record the revocation in syslog (authpriv is forwarded off-host)"
+      ansible.builtin.command:
+        argv:
+          - logger
+          - -p
+          - authpriv.notice
+          - -t
+          - ansible-revoke
+          - "revoked_user={{ revoke_username }} change_ref={{ change_ref | default('manifest') }} purge={{ users_purge | bool }}"
+      changed_when: false
+      when:
+        - users_revoke_keys.changed | default(false) or users_revoke_sudo.changed or users_revoke_kill.changed | default(false) or users_revoke_account.changed | default(false)
+
+    - name: "Delete the account {{ revoke_username }} (only with users_purge=true)"
+      ansible.builtin.user:
+        name: "{{ revoke_username }}"
+        state: absent
+        remove: true
+      when:
+        - _acct is not none
+        - users_purge | bool

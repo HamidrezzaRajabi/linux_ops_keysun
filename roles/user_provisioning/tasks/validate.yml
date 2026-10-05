@@ -1,0 +1,78 @@
+---
+- name: Assert managed_users is a list of entries that each have a username
+  ansible.builtin.assert:
+    that:
+      - managed_users is iterable
+      - managed_users is not string
+      - managed_users is not mapping
+      - managed_users | selectattr('username', 'undefined') | list | length == 0
+    fail_msg: "managed_users must be a YAML list and every entry needs a username."
+    quiet: true
+
+- name: Assert usernames (and their sudoers fragment names) are unique
+  ansible.builtin.assert:
+    that:
+      - (managed_users | map(attribute='username') | list | length) == (managed_users | map(attribute='username') | list | unique | length)
+      - (managed_users | map(attribute='username') | map('regex_replace', '[^a-z0-9_-]', '_') | list | length) == (managed_users | map(attribute='username') | map('regex_replace', '[^a-z0-9_-]', '_') | list | unique | length)
+    fail_msg: "Duplicate usernames, or two usernames that map to the same sudoers fragment (dots become underscores)."
+    quiet: true
+
+- name: Validate identity, state and group settings of every entry
+  ansible.builtin.assert:
+    that:
+      - item.username is match(users_username_regex)
+      - item.username not in ([users_connection_account] + users_protected_accounts)
+      - _state in users_valid_states
+      - (item.groups | default([])) | intersect(users_forbidden_groups) | length == 0
+      - not _wants_docker or (users_acknowledge_docker_risk | bool)
+    fail_msg: >-
+      Invalid or unsafe entry '{{ item.username }}' (state={{ _state | default('?') }}):
+      username must match {{ users_username_regex }}; it must not be root or the account Ansible
+      connects as ({{ users_connection_account }}); state must be one of {{ users_valid_states | join('/') }};
+      groups: must not contain {{ users_forbidden_groups | join(', ') }} (use sudo:/docker:);
+      docker: true needs -e users_acknowledge_docker_risk=true.
+    quiet: true
+  loop: "{{ managed_users }}"
+  loop_control:
+    label: "{{ item.username }}"
+  vars:
+    _state: "{{ item.state | default('') }}"
+    _wants_docker: "{{ _state == 'present' and (item.docker | default(false) | bool) }}"
+
+- name: Validate the sudo policy of every entry
+  ansible.builtin.assert:
+    that:
+      - _sudo_mode in users_valid_sudo_modes
+      - not (_sudo_on and _sudo_mode == 'scoped') or (_commands | reject('match', users_sudo_command_regex) | list | length == 0)
+      - not (_sudo_on and _sudo_mode != 'none') or not (_sudo.require_password | default(true) | bool) or (users_allow_password_sudo | bool)
+    fail_msg: >-
+      Invalid sudo policy for '{{ item.username }}': mode must be {{ users_valid_sudo_modes | join('/') }};
+      scoped commands must be absolute paths without , # or newlines; require_password: true cannot work
+      because this project sets no passwords (set require_password: false, or users_allow_password_sudo: true
+      if you manage passwords elsewhere).
+    quiet: true
+  loop: "{{ managed_users }}"
+  loop_control:
+    label: "{{ item.username }}"
+  vars:
+    _sudo: "{{ item.sudo | default({}) }}"
+    _sudo_on: "{{ _sudo.enabled | default(false) | bool }}"
+    _sudo_mode: "{{ _sudo.mode | default('none') }}"
+    _commands: "{{ _sudo.commands | default([]) }}"
+
+- name: Validate the SSH keys of present users
+  ansible.builtin.assert:
+    that:
+      - _keys | length > 0
+      - _keys | reject('match', users_ssh_key_regex) | list | length == 0
+      - _keys | map('regex_replace', '^(\S+) .*$', '\\1') | list | difference(users_allowed_key_types) | length == 0
+    fail_msg: >-
+      '{{ item.username }}' needs at least one public key (ssh_public_keys: [...]), each as
+      "<type> <base64> [comment]" with a type from {{ users_allowed_key_types | join(', ') }}.
+      Key options such as from= or command= are not supported.
+    quiet: true
+  loop: "{{ managed_users | selectattr('state', 'equalto', 'present') | list }}"
+  loop_control:
+    label: "{{ item.username }}"
+  vars:
+    _keys: "{{ item.ssh_public_keys | default([item.ssh_public_key] if item.ssh_public_key is defined else []) }}"
